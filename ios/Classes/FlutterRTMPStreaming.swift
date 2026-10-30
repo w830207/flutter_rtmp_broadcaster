@@ -129,6 +129,7 @@ public class FlutterRTMPStreaming : NSObject {
         videoSettings.maxKeyFrameIntervalDuration = 2
         videoSettings.bitRate = bitrate
         rtmpStream.videoSettings = videoSettings
+        myDelegate.maxBitrate = bitrate
         rtmpConnection.delegate = myDelegate
         self.retries = 0
         // Run this on the ui thread.
@@ -238,13 +239,14 @@ public class FlutterRTMPStreaming : NSObject {
     public func addVideoData(buffer: CMSampleBuffer) {
         if let description = CMSampleBufferGetFormatDescription(buffer) {
             let dimensions = CMVideoFormatDescriptionGetDimensions(description)
-            var videoSettings: VideoCodecSettings = rtmpStream.videoSettings
-            videoSettings.videoSize = CGSize(width: Int(dimensions.width), height: Int(dimensions.height))
-            videoSettings.profileLevel = kVTProfileLevel_H264_Baseline_AutoLevel as String
-            videoSettings.maxKeyFrameIntervalDuration = 2
-            videoSettings.bitRate = 1200 * 1024
-            rtmpStream.videoSettings = videoSettings
-            rtmpStream.frameRate = 24
+            let size = CGSize(width: Int(dimensions.width), height: Int(dimensions.height))
+            // Follow the capture orientation, but keep the bitrate and frame
+            // rate chosen in open() instead of resetting them every frame.
+            if rtmpStream.videoSettings.videoSize != size {
+                var videoSettings: VideoCodecSettings = rtmpStream.videoSettings
+                videoSettings.videoSize = size
+                rtmpStream.videoSettings = videoSettings
+            }
         }
         rtmpStream.append(buffer)
     }
@@ -263,7 +265,8 @@ public class FlutterRTMPStreaming : NSObject {
 
 class MyRTMPStreamQoSDelagate: RTMPConnectionDelegate {
     let minBitrate: Int = 300 * 1024
-    let maxBitrate: Int = 2500 * 1024
+    // Set to the requested bitrate in open(); adaptive bitrate never exceeds it.
+    var maxBitrate: Int = 2500 * 1024
     let incrementBitrate: Int = 512 * 1024
 
     func connection(_ connection: RTMPConnection, publishInsufficientBWOccured stream: RTMPStream) {

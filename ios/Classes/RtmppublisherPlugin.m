@@ -202,6 +202,7 @@ FlutterStreamHandler>
 @property(assign, nonatomic) BOOL isStreamingImages;
 @property(assign, nonatomic) ResolutionPreset resolutionPreset;
 @property(assign, nonatomic) ResolutionPreset streamingPreset;
+@property(assign, nonatomic) BOOL mirror;
 @property(assign, nonatomic) CMTime lastVideoSampleTime;
 @property(assign, nonatomic) CMTime lastAudioSampleTime;
 @property(assign, nonatomic) CMTime videoTimeOffset;
@@ -270,13 +271,10 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
     AVCaptureConnection *connection =
     [AVCaptureConnection connectionWithInputPorts:_captureVideoInput.ports
                                            output:_captureVideoOutput];
-    if ([_captureDevice position] == AVCaptureDevicePositionFront) {
-        connection.videoMirrored = YES;
-    }
-    connection.videoOrientation = AVCaptureVideoOrientationPortrait;
     [_captureSession addInputWithNoConnections:_captureVideoInput];
     [_captureSession addOutputWithNoConnections:_captureVideoOutput];
     [_captureSession addConnection:connection];
+    [self updateVideoConnection];
     _capturePhotoOutput = [AVCapturePhotoOutput new];
     [_capturePhotoOutput setHighResolutionCaptureEnabled:YES];
     [_captureSession addOutput:_capturePhotoOutput];
@@ -289,6 +287,114 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
 
 - (void)start {
     [_captureSession startRunning];
+}
+
+// The streamed frames are the capture buffers as-is, so the connection
+// decides both the stream orientation and whether viewers see a mirror.
+- (void)updateVideoConnection {
+    AVCaptureVideoOrientation videoOrientation = AVCaptureVideoOrientationPortrait;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if ([scene isKindOfClass:[UIWindowScene class]]) {
+            switch (((UIWindowScene *)scene).interfaceOrientation) {
+                case UIInterfaceOrientationLandscapeLeft:
+                    videoOrientation = AVCaptureVideoOrientationLandscapeLeft;
+                    break;
+                case UIInterfaceOrientationLandscapeRight:
+                    videoOrientation = AVCaptureVideoOrientationLandscapeRight;
+                    break;
+                case UIInterfaceOrientationPortraitUpsideDown:
+                    videoOrientation = AVCaptureVideoOrientationPortraitUpsideDown;
+                    break;
+                default:
+                    break;
+            }
+            break;
+        }
+    }
+    BOOL mirrored = _captureDevice.position == AVCaptureDevicePositionFront && _mirror;
+    for (AVCaptureConnection *connection in _captureVideoOutput.connections) {
+        if (connection.isVideoOrientationSupported) {
+            connection.videoOrientation = videoOrientation;
+        }
+        if (connection.isVideoMirroringSupported) {
+            connection.automaticallyAdjustsVideoMirroring = NO;
+            connection.videoMirrored = mirrored;
+        }
+    }
+}
+
+- (void)switchCameraWithResult:(FlutterResult)result {
+    AVCaptureDevicePosition position = _captureDevice.position == AVCaptureDevicePositionFront
+        ? AVCaptureDevicePositionBack
+        : AVCaptureDevicePositionFront;
+    AVCaptureDevice *device = [AVCaptureDevice defaultDeviceWithDeviceType:AVCaptureDeviceTypeBuiltInWideAngleCamera
+                                                                 mediaType:AVMediaTypeVideo
+                                                                  position:position];
+    if (device == nil) {
+        result([FlutterError errorWithCode:@"switchCameraFailed"
+                                   message:@"No camera at the other position"
+                                   details:nil]);
+        return;
+    }
+    NSError *error = nil;
+    AVCaptureDeviceInput *input = [AVCaptureDeviceInput deviceInputWithDevice:device error:&error];
+    if (error) {
+        result(getFlutterError(error));
+        return;
+    }
+
+    [_captureSession beginConfiguration];
+    for (AVCaptureConnection *connection in _captureVideoOutput.connections) {
+        [_captureSession removeConnection:connection];
+    }
+    [_captureSession removeInput:_captureVideoInput];
+    [_captureSession addInputWithNoConnections:input];
+    [_captureSession addConnection:[AVCaptureConnection connectionWithInputPorts:input.ports
+                                                                          output:_captureVideoOutput]];
+    [_captureSession commitConfiguration];
+
+    _captureDevice = device;
+    _captureVideoInput = input;
+    [self updateVideoConnection];
+    result(nil);
+}
+
+- (void)setMirror:(BOOL)mirror result:(FlutterResult)result {
+    _mirror = mirror;
+    [self updateVideoConnection];
+    result(nil);
+}
+
+- (void)setFlashMode:(NSString *)mode result:(FlutterResult)result {
+    AVCaptureTorchMode torchMode;
+    if ([mode isEqualToString:@"torch"] || [mode isEqualToString:@"always"]) {
+        torchMode = AVCaptureTorchModeOn;
+    } else if ([mode isEqualToString:@"off"]) {
+        torchMode = AVCaptureTorchModeOff;
+    } else {
+        result([FlutterError errorWithCode:@"setFlashModeFailed"
+                                   message:[NSString stringWithFormat:@"Unsupported flash mode: %@", mode]
+                                   details:nil]);
+        return;
+    }
+    if (!_captureDevice.hasTorch) {
+        if (torchMode == AVCaptureTorchModeOff) {
+            result(nil);
+        } else {
+            result([FlutterError errorWithCode:@"setFlashModeFailed"
+                                       message:@"This camera has no torch"
+                                       details:nil]);
+        }
+        return;
+    }
+    NSError *error = nil;
+    if (![_captureDevice lockForConfiguration:&error]) {
+        result(getFlutterError(error));
+        return;
+    }
+    _captureDevice.torchMode = torchMode;
+    [_captureDevice unlockForConfiguration];
+    result(nil);
 }
 
 - (void)stop {
@@ -737,7 +843,9 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         // TODO: FIX
         // [self newAudioSample:sampleBuffer];
         [self setStreamingSessionPreset:_streamingPreset];
-        
+        // The interface may have rotated since the camera was opened.
+        [self updateVideoConnection];
+
         [_rtmpStream openWithUrl:url width: _streamingSize.width height: _streamingSize.height bitrate: bitrate.integerValue];
         _isStreaming = YES;
         _isStreamingPaused = NO;
@@ -1154,6 +1262,12 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
             [_camera stopVideoRecordingWithResult:result];
         } else if ([@"stopRecordingOrStreaming" isEqualToString:call.method]) {
             [_camera stopVideoRecordingOrStreamingWithResult:result];
+        } else if ([@"switchCamera" isEqualToString:call.method]) {
+            [_camera switchCameraWithResult:result];
+        } else if ([@"setMirror" isEqualToString:call.method]) {
+            [_camera setMirror:[call.arguments[@"mirror"] boolValue] result:result];
+        } else if ([@"setFlashMode" isEqualToString:call.method]) {
+            [_camera setFlashMode:call.arguments[@"mode"] result:result];
         } else {
             result(FlutterMethodNotImplemented);
         }

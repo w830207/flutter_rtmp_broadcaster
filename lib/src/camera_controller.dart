@@ -245,6 +245,9 @@ class CameraController extends ValueNotifier<CameraValue> {
   int? _textureId;
   String? _videoRecordingPath;
   bool _isDisposed = false;
+  late bool _isFrontFacing =
+      description.lensDirection == CameraLensDirection.front;
+  bool _mirror = false;
   StreamSubscription<dynamic>? _eventSubscription;
   StreamSubscription<dynamic>? _imageStreamSubscription;
   Completer<void>? _creatingCompleter;
@@ -1013,6 +1016,8 @@ class CameraController extends ValueNotifier<CameraValue> {
         'switchCamera',
         <String, dynamic>{'textureId': _textureId},
       );
+      _isFrontFacing = !_isFrontFacing;
+      notifyListeners();
     } on PlatformException catch (e) {
       throw CameraException(e.code, e.message);
     }
@@ -1035,6 +1040,8 @@ class CameraController extends ValueNotifier<CameraValue> {
         'setMirror',
         <String, dynamic>{'textureId': _textureId, 'mirror': mirror},
       );
+      _mirror = mirror;
+      notifyListeners();
     } on PlatformException catch (e) {
       throw CameraException(e.code, e.message);
     }
@@ -1095,7 +1102,14 @@ class CameraController extends ValueNotifier<CameraValue> {
         creationParamsCodec: StandardMessageCodec(),
       );
     }
-    return Texture(textureId: _textureId!);
+    final Widget texture = Texture(textureId: _textureId!);
+    // On iOS the preview shows the streamed buffer, which is only mirrored
+    // when viewers should see a mirror. Keep the front camera preview
+    // mirrored for the streamer either way, like a selfie camera.
+    if (_isFrontFacing && !_mirror) {
+      return Transform.flip(flipX: true, child: texture);
+    }
+    return texture;
   }
 
   /// Releases the resources of this camera.

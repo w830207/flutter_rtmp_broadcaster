@@ -25,7 +25,9 @@ final EventChannel _eventChannel = EventChannel(
 /// disposing a real, channel-backed controller inside a `test()` created
 /// alongside `testWidgets()` cases in the same file has been observed to
 /// hang the test runner's teardown.
-Future<CameraController> _initializedController() async {
+Future<CameraController> _initializedController({
+  CameraLensDirection lensDirection = CameraLensDirection.back,
+}) async {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(_cameraChannel, (MethodCall call) async {
     if (call.method == 'initialize') {
@@ -47,7 +49,7 @@ Future<CameraController> _initializedController() async {
   final CameraController controller = CameraController(
     CameraDescription(
       name: 'test',
-      lensDirection: CameraLensDirection.back,
+      lensDirection: lensDirection,
       sensorOrientation: 0,
     ),
     ResolutionPreset.low,
@@ -129,5 +131,40 @@ void main() {
     final Widget preview = controller.buildPreview();
 
     expect(preview, isA<Texture>());
+  });
+
+  group('front camera preview mirroring', () {
+    bool isFlippedHorizontally(Widget preview) =>
+        preview is Transform && preview.transform.entry(0, 0) == -1;
+
+    testWidgets('mirrors the front camera preview by default',
+        (WidgetTester tester) async {
+      final CameraController controller = await _initializedController(
+        lensDirection: CameraLensDirection.front,
+      );
+
+      expect(isFlippedHorizontally(controller.buildPreview()), isTrue);
+    });
+
+    testWidgets('does not mirror the preview again once viewers see a mirror',
+        (WidgetTester tester) async {
+      final CameraController controller = await _initializedController(
+        lensDirection: CameraLensDirection.front,
+      );
+
+      await controller.setMirror(true);
+
+      expect(controller.buildPreview(), isA<Texture>());
+    });
+
+    testWidgets('mirrors the preview after switching to the front camera',
+        (WidgetTester tester) async {
+      final CameraController controller = await _initializedController();
+      expect(controller.buildPreview(), isA<Texture>());
+
+      await controller.switchCamera();
+
+      expect(isFlippedHorizontally(controller.buildPreview()), isTrue);
+    });
   });
 }
