@@ -102,7 +102,8 @@ class MethodCallHandlerImplNew(
             }
 
             "startVideoStreaming" -> {
-                Log.i("Stuff", "startVideoStreaming ${call.arguments}")
+                // Never log call.arguments here: the url contains the stream key.
+                Log.i("Stuff", "startVideoStreaming")
                 getCameraView()?.startVideoStreaming(
                     call.argument("url"),
                     call.argument("bitrate"),
@@ -111,7 +112,7 @@ class MethodCallHandlerImplNew(
             }
 
             "startVideoRecordingAndStreaming" -> {
-                Log.i("Stuff", "startVideoRecordingAndStreaming ${call.arguments}")
+                Log.i("Stuff", "startVideoRecordingAndStreaming")
                 getCameraView()?.startVideoRecordingAndStreaming(
                     call.argument("filePath"),
                     call.argument("url"),
@@ -181,13 +182,23 @@ class MethodCallHandlerImplNew(
             }
 
             "setMirror" -> {
-                Log.i("Stuff", "setMirror ${call.arguments}")
-                getCameraView()?.setMirror(call.argument("mirror")!!, result)
+                Log.i("Stuff", "setMirror")
+                val mirror: Boolean? = call.argument("mirror")
+                if (mirror == null) {
+                    result.error("setMirror", "Must specify mirror.", null)
+                } else {
+                    getCameraView()?.setMirror(mirror, result)
+                }
             }
 
             "setFlashMode" -> {
-                Log.i("Stuff", "setFlashMode ${call.arguments}")
-                getCameraView()?.setFlashMode(call.argument("mode")!!, result)
+                Log.i("Stuff", "setFlashMode")
+                val mode: String? = call.argument("mode")
+                if (mode == null) {
+                    result.error("setFlashMode", "Must specify mode.", null)
+                } else {
+                    getCameraView()?.setFlashMode(mode, result)
+                }
             }
 
             "getStreamStatistics" -> {

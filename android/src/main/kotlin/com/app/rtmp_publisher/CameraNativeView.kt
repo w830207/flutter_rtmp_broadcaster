@@ -8,6 +8,7 @@ import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraMetadata
+import android.media.CamcorderProfile
 import android.util.Log
 import android.view.SurfaceHolder
 import android.view.View
@@ -164,7 +165,8 @@ class CameraNativeView(
 
 
     fun startVideoStreaming(url: String?, bitrate: Int?, result: MethodChannel.Result) {
-        Log.d("CameraNativeView", "startVideoStreaming url: $url")
+        // Never log the url: it contains the stream key.
+        Log.d("CameraNativeView", "startVideoStreaming")
         if (url == null) {
             result.error("startVideoStreaming", "Must specify a url.", null)
             return
@@ -306,7 +308,7 @@ class CameraNativeView(
         cameraName = targetCamera
         // Use the same profile as startVideoStreaming so prepareVideo there
         // does not see a size change and keeps the running preview.
-        val profile = CameraUtils.getBestAvailableCamcorderProfileForResolutionPreset(cameraName, preset)
+        val profile: CamcorderProfile = CameraUtils.getBestAvailableCamcorderProfileForResolutionPreset(cameraName, preset)
 
         Log.d("CameraNativeView", "startPreview: $preset")
         if (isSurfaceCreated) {
@@ -318,7 +320,7 @@ class CameraNativeView(
                 // The camera capture size is taken from the video encoder, which
                 // defaults to 640x480 until prepareVideo is called. Without this the
                 // 4:3 capture gets stretched into the 16:9 / 9:16 output.
-                val rotation = CameraHelper.getCameraOrientation(glView.context)
+                val rotation: Int = CameraHelper.getCameraOrientation(glView.context)
                 rtmpCamera.prepareVideo(
                     profile.videoFrameWidth,
                     profile.videoFrameHeight,
@@ -391,7 +393,7 @@ class CameraNativeView(
         ret["isAudioMuted"] = rtmpCamera.isAudioMuted
         ret["bitrate"] = rtmpCamera.bitrate
         // streamWidth/Height are the pre-rotation size; report what is actually sent.
-        val portrait = CameraHelper.isPortrait(glView.context)
+        val portrait: Boolean = CameraHelper.isPortrait(glView.context)
         ret["width"] = if (portrait) rtmpCamera.streamHeight else rtmpCamera.streamWidth
         ret["height"] = if (portrait) rtmpCamera.streamWidth else rtmpCamera.streamHeight
         ret["fps"] = fps

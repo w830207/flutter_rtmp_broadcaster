@@ -238,8 +238,8 @@ public class FlutterRTMPStreaming : NSObject {
     @objc
     public func addVideoData(buffer: CMSampleBuffer) {
         if let description = CMSampleBufferGetFormatDescription(buffer) {
-            let dimensions = CMVideoFormatDescriptionGetDimensions(description)
-            let size = CGSize(width: Int(dimensions.width), height: Int(dimensions.height))
+            let dimensions: CMVideoDimensions = CMVideoFormatDescriptionGetDimensions(description)
+            let size: CGSize = CGSize(width: Int(dimensions.width), height: Int(dimensions.height))
             // Follow the capture orientation, but keep the bitrate and frame
             // rate chosen in open() instead of resetting them every frame.
             if rtmpStream.videoSettings.videoSize != size {
