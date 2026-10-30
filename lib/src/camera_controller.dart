@@ -999,6 +999,47 @@ class CameraController extends ValueNotifier<CameraValue> {
     }
   }
 
+  /// Switches between the front and back camera without stopping an active
+  /// stream.
+  Future<void> switchCamera() async {
+    if (!value.isInitialized! || _isDisposed) {
+      throw CameraException(
+        'Uninitialized CameraController',
+        'switchCamera was called on uninitialized CameraController.',
+      );
+    }
+    try {
+      await _channel.invokeMethod<void>(
+        'switchCamera',
+        <String, dynamic>{'textureId': _textureId},
+      );
+    } on PlatformException catch (e) {
+      throw CameraException(e.code, e.message);
+    }
+  }
+
+  /// Sets whether viewers see the front camera mirrored.
+  ///
+  /// When false (the default), the streamed front camera image is flipped
+  /// back so text reads correctly for viewers. Has no effect on the back
+  /// camera.
+  Future<void> setMirror(bool mirror) async {
+    if (!value.isInitialized! || _isDisposed) {
+      throw CameraException(
+        'Uninitialized CameraController',
+        'setMirror was called on uninitialized CameraController.',
+      );
+    }
+    try {
+      await _channel.invokeMethod<void>(
+        'setMirror',
+        <String, dynamic>{'textureId': _textureId, 'mirror': mirror},
+      );
+    } on PlatformException catch (e) {
+      throw CameraException(e.code, e.message);
+    }
+  }
+
   /// Sets the exposure mode for taking pictures.
   Future<void> setExposureMode(ExposureMode mode) async {
     if (!value.isInitialized! || _isDisposed) {

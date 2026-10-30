@@ -13,6 +13,7 @@ import android.view.SurfaceHolder
 import android.view.View
 import android.widget.Toast
 import com.pedro.common.ConnectChecker
+import com.pedro.encoder.input.video.CameraHelper
 import com.pedro.encoder.input.video.CameraHelper.Facing.BACK
 import com.pedro.encoder.input.video.CameraHelper.Facing.FRONT
 import com.pedro.encoder.utils.gl.AspectRatioMode
@@ -39,6 +40,7 @@ class CameraNativeView(
 
     private var isSurfaceCreated = false
     private var fps = 0
+    private var mirror = false
 
     init {
         glView.setAspectRatioMode(AspectRatioMode.Adjust)
@@ -302,7 +304,9 @@ class CameraNativeView(
             cameraNameArg
         }
         cameraName = targetCamera
-        val previewSize = CameraUtils.computeBestPreviewSize(cameraName, preset)
+        // Use the same profile as startVideoStreaming so prepareVideo there
+        // does not see a size change and keeps the running preview.
+        val profile = CameraUtils.getBestAvailableCamcorderProfileForResolutionPreset(cameraName, preset)
 
         Log.d("CameraNativeView", "startPreview: $preset")
         if (isSurfaceCreated) {
@@ -311,13 +315,69 @@ class CameraNativeView(
                     rtmpCamera.stopPreview()
                 }
 
-                rtmpCamera.startPreview(if (isFrontFacing(targetCamera)) FRONT else BACK, previewSize.width, previewSize.height)
+                // The camera capture size is taken from the video encoder, which
+                // defaults to 640x480 until prepareVideo is called. Without this the
+                // 4:3 capture gets stretched into the 16:9 / 9:16 output.
+                val rotation = CameraHelper.getCameraOrientation(glView.context)
+                rtmpCamera.prepareVideo(
+                    profile.videoFrameWidth,
+                    profile.videoFrameHeight,
+                    30,
+                    profile.videoBitRate,
+                    rotation
+                )
+                rtmpCamera.startPreview(
+                    if (isFrontFacing(targetCamera)) FRONT else BACK,
+                    profile.videoFrameWidth,
+                    profile.videoFrameHeight,
+                    rotation
+                )
+                applyStreamFlip()
             } catch (e: CameraAccessException) {
 //                close()
                 activity?.runOnUiThread { dartMessenger?.send(DartMessenger.EventType.ERROR, "CameraAccessException") }
                 return
             }
         }
+    }
+
+    fun switchCamera(result: MethodChannel.Result) {
+        try {
+            rtmpCamera.switchCamera()
+            cameraName = rtmpCamera.currentCameraId
+            applyStreamFlip()
+            result.success(null)
+        } catch (e: Exception) {
+            result.error("switchCameraFailed", e.message, null)
+        }
+    }
+
+    fun setMirror(mirror: Boolean, result: MethodChannel.Result) {
+        this.mirror = mirror
+        applyStreamFlip()
+        result.success(null)
+    }
+
+    fun setFlashMode(mode: String, result: MethodChannel.Result) {
+        try {
+            when (mode) {
+                "torch", "always" -> rtmpCamera.enableLantern()
+                "off" -> rtmpCamera.disableLantern()
+                else -> {
+                    result.error("setFlashModeFailed", "Unsupported flash mode: $mode", null)
+                    return
+                }
+            }
+            result.success(null)
+        } catch (e: Exception) {
+            result.error("setFlashModeFailed", e.message, null)
+        }
+    }
+
+    // The front camera is streamed mirrored by default; flip it back unless
+    // mirroring was requested.
+    private fun applyStreamFlip() {
+        glView.setIsStreamHorizontalFlip(rtmpCamera.cameraFacing == FRONT && !mirror)
     }
 
     fun getStreamStatistics(result: MethodChannel.Result) {
@@ -330,8 +390,10 @@ class CameraNativeView(
         ret["droppedVideoFrames"] = streamClient.getDroppedVideoFrames()
         ret["isAudioMuted"] = rtmpCamera.isAudioMuted
         ret["bitrate"] = rtmpCamera.bitrate
-        ret["width"] = rtmpCamera.streamWidth
-        ret["height"] = rtmpCamera.streamHeight
+        // streamWidth/Height are the pre-rotation size; report what is actually sent.
+        val portrait = CameraHelper.isPortrait(glView.context)
+        ret["width"] = if (portrait) rtmpCamera.streamHeight else rtmpCamera.streamWidth
+        ret["height"] = if (portrait) rtmpCamera.streamWidth else rtmpCamera.streamHeight
         ret["fps"] = fps
         result.success(ret)
     }
@@ -341,6 +403,10 @@ class CameraNativeView(
     }
 
     override fun dispose() {
+        // Release the camera so the next CameraNativeView can open it.
+        if (rtmpCamera.isStreaming) rtmpCamera.stopStream()
+        if (rtmpCamera.isRecording) rtmpCamera.stopRecord()
+        if (rtmpCamera.isOnPreview) rtmpCamera.stopPreview()
         isSurfaceCreated = false
         activity = null
     }

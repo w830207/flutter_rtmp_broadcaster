@@ -197,6 +197,33 @@ void main() {
     expect(controller.value.flashMode, FlashMode.torch);
   });
 
+  test('switchCamera sends textureId', () async {
+    final CameraController controller = await _createInitializedController();
+    log.clear();
+
+    await controller.switchCamera();
+
+    expect(log, <Matcher>[
+      isMethodCall('switchCamera', arguments: <String, dynamic>{
+        'textureId': _textureId,
+      }),
+    ]);
+  });
+
+  test('setMirror sends textureId and mirror', () async {
+    final CameraController controller = await _createInitializedController();
+    log.clear();
+
+    await controller.setMirror(true);
+
+    expect(log, <Matcher>[
+      isMethodCall('setMirror', arguments: <String, dynamic>{
+        'textureId': _textureId,
+        'mirror': true,
+      }),
+    ]);
+  });
+
   test('setExposureMode sends textureId and serialized mode, updates value',
       () async {
     final CameraController controller = await _createInitializedController();

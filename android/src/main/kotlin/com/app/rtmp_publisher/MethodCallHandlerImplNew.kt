@@ -175,6 +175,21 @@ class MethodCallHandlerImplNew(
                 }
             }
 
+            "switchCamera" -> {
+                Log.i("Stuff", "switchCamera")
+                getCameraView()?.switchCamera(result)
+            }
+
+            "setMirror" -> {
+                Log.i("Stuff", "setMirror ${call.arguments}")
+                getCameraView()?.setMirror(call.argument("mirror")!!, result)
+            }
+
+            "setFlashMode" -> {
+                Log.i("Stuff", "setFlashMode ${call.arguments}")
+                getCameraView()?.setFlashMode(call.argument("mode")!!, result)
+            }
+
             "getStreamStatistics" -> {
                 Log.i("Stuff", "getStreamStatistics")
                 try {
