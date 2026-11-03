@@ -191,6 +191,16 @@ class MethodCallHandlerImplNew(
                 }
             }
 
+            "setAudioMuted" -> {
+                Log.i("Stuff", "setAudioMuted")
+                val muted: Boolean? = call.argument("muted")
+                if (muted == null) {
+                    result.error("setAudioMuted", "Must specify muted.", null)
+                } else {
+                    getCameraView()?.setAudioMuted(muted, result)
+                }
+            }
+
             "setFlashMode" -> {
                 Log.i("Stuff", "setFlashMode")
                 val mode: String? = call.argument("mode")

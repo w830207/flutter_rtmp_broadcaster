@@ -1047,6 +1047,25 @@ class CameraController extends ValueNotifier<CameraValue> {
     }
   }
 
+  /// Sets whether the microphone is muted. While muted, silence is streamed
+  /// so the stream keeps its audio track.
+  Future<void> setAudioMuted(bool muted) async {
+    if (!value.isInitialized! || _isDisposed) {
+      throw CameraException(
+        'Uninitialized CameraController',
+        'setAudioMuted was called on uninitialized CameraController.',
+      );
+    }
+    try {
+      await _channel.invokeMethod<void>(
+        'setAudioMuted',
+        <String, dynamic>{'textureId': _textureId, 'muted': muted},
+      );
+    } on PlatformException catch (e) {
+      throw CameraException(e.code, e.message);
+    }
+  }
+
   /// Sets the exposure mode for taking pictures.
   Future<void> setExposureMode(ExposureMode mode) async {
     if (!value.isInitialized! || _isDisposed) {

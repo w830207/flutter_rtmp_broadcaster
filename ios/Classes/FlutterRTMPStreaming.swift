@@ -171,11 +171,14 @@ public class FlutterRTMPStreaming : NSObject {
             }
             rtmpStream.publish(streamName)
             retries = 0
+            eventSink([
+                "event": "rtmp_connected"
+            ])
             break
         case RTMPConnection.Code.connectFailed.rawValue, RTMPConnection.Code.connectClosed.rawValue:
             scheduleReconnect(
                 errorDescription: "connection failed " + e.type.rawValue,
-                terminalEvent: "error"
+                terminalEvent: "rtmp_stopped"
             )
             break
         default:

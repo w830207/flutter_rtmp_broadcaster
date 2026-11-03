@@ -11,7 +11,7 @@ class DartMessenger(messenger: BinaryMessenger, eventChannelId: Long) {
     private var eventSink: EventSink? = null
 
     enum class EventType {
-        ERROR, CAMERA_CLOSING, RTMP_STOPPED, RTMP_RETRY, ROTATION_UPDATE, CAMERA_READY
+        ERROR, CAMERA_CLOSING, RTMP_CONNECTED, RTMP_STOPPED, RTMP_RETRY, ROTATION_UPDATE, CAMERA_READY
     }
 
     fun sendCameraClosingEvent() {

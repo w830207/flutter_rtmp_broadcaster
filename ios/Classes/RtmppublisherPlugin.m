@@ -203,6 +203,7 @@ FlutterStreamHandler>
 @property(assign, nonatomic) ResolutionPreset resolutionPreset;
 @property(assign, nonatomic) ResolutionPreset streamingPreset;
 @property(assign, nonatomic) BOOL mirror;
+@property(assign, nonatomic) BOOL audioMuted;
 @property(assign, nonatomic) CMTime lastVideoSampleTime;
 @property(assign, nonatomic) CMTime lastAudioSampleTime;
 @property(assign, nonatomic) CMTime videoTimeOffset;
@@ -362,6 +363,11 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
 - (void)setMirror:(BOOL)mirror result:(FlutterResult)result {
     _mirror = mirror;
     [self updateVideoConnection];
+    result(nil);
+}
+
+- (void)setAudioMuted:(BOOL)muted result:(FlutterResult)result {
+    _audioMuted = muted;
     result(nil);
 }
 
@@ -610,6 +616,14 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         if (output == _captureVideoOutput) {
             [_rtmpStream addVideoDataWithBuffer:sampleBuffer ];
         } else {
+            if (_audioMuted) {
+                // Stream silence rather than dropping buffers, so the stream
+                // keeps a continuous audio track.
+                CMBlockBufferRef blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer);
+                if (blockBuffer != NULL) {
+                    CMBlockBufferFillDataBytes(0, blockBuffer, 0, CMBlockBufferGetDataLength(blockBuffer));
+                }
+            }
             [_rtmpStream addAudioDataWithBuffer:sampleBuffer ];
         }
         CFRelease(sampleBuffer);
@@ -827,7 +841,10 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
 - (void)startVideoStreamingAtUrl:(NSString *)url bitrate:(NSNumber *)bitrate result:(FlutterResult)result {
     if (_isStreaming) {
-        _eventSink(@{@"event" : @"error", @"errorDescription" : @"Video is already streaming!"});
+        // A stream that gave up reconnecting (rtmp_stopped) is still marked as
+        // streaming here; close it so the app can start a new one.
+        [_rtmpStream close];
+        _isStreaming = NO;
     }
     if (!_isStreaming) {
         if (![self setupWriterForUrl:url ]) {
@@ -1266,6 +1283,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
             [_camera switchCameraWithResult:result];
         } else if ([@"setMirror" isEqualToString:call.method]) {
             [_camera setMirror:[call.arguments[@"mirror"] boolValue] result:result];
+        } else if ([@"setAudioMuted" isEqualToString:call.method]) {
+            [_camera setAudioMuted:[call.arguments[@"muted"] boolValue] result:result];
         } else if ([@"setFlashMode" isEqualToString:call.method]) {
             [_camera setFlashMode:call.arguments[@"mode"] result:result];
         } else {

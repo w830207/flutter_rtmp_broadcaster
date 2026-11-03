@@ -80,6 +80,9 @@ class CameraNativeView(
     }
 
     override fun onConnectionSuccess() {
+        activity?.runOnUiThread {
+            dartMessenger?.send(DartMessenger.EventType.RTMP_CONNECTED, null)
+        }
     }
 
     override fun onConnectionFailed(reason: String) {
@@ -357,6 +360,11 @@ class CameraNativeView(
     fun setMirror(mirror: Boolean, result: MethodChannel.Result) {
         this.mirror = mirror
         applyStreamFlip()
+        result.success(null)
+    }
+
+    fun setAudioMuted(muted: Boolean, result: MethodChannel.Result) {
+        if (muted) rtmpCamera.disableAudio() else rtmpCamera.enableAudio()
         result.success(null)
     }
 

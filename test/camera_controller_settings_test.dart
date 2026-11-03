@@ -224,6 +224,20 @@ void main() {
     ]);
   });
 
+  test('setAudioMuted sends textureId and muted', () async {
+    final CameraController controller = await _createInitializedController();
+    log.clear();
+
+    await controller.setAudioMuted(true);
+
+    expect(log, <Matcher>[
+      isMethodCall('setAudioMuted', arguments: <String, dynamic>{
+        'textureId': _textureId,
+        'muted': true,
+      }),
+    ]);
+  });
+
   test('setExposureMode sends textureId and serialized mode, updates value',
       () async {
     final CameraController controller = await _createInitializedController();
