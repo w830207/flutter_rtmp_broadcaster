@@ -191,6 +191,26 @@ class MethodCallHandlerImplNew(
                 }
             }
 
+            "setOverlays" -> {
+                val overlays: List<Map<String, Any>>? = call.argument("overlays")
+                if (overlays == null) {
+                    result.error("setOverlays", "Must specify overlays.", null)
+                } else {
+                    getCameraView()?.setOverlays(
+                        overlays.map { overlay: Map<String, Any> ->
+                            CameraNativeView.OverlaySpec(
+                                path = overlay["path"] as String,
+                                left = (overlay["left"] as Number).toDouble(),
+                                top = (overlay["top"] as Number).toDouble(),
+                                width = (overlay["width"] as Number).toDouble(),
+                                height = (overlay["height"] as Number).toDouble(),
+                            )
+                        },
+                        result,
+                    )
+                }
+            }
+
             "setAudioMuted" -> {
                 Log.i("Stuff", "setAudioMuted")
                 val muted: Boolean? = call.argument("muted")

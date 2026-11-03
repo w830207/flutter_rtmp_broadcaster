@@ -17,6 +17,8 @@ public class FlutterRTMPStreaming : NSObject {
     private var retries: Int = 0
     private let eventSink: FlutterEventSink
     private let myDelegate = MyRTMPStreamQoSDelagate()
+    /// Draws overlays onto each video frame before it is streamed.
+    @objc public var overlayCompositor: FlutterRTMPOverlayCompositor? = nil
     
     @objc
     public init(sink: @escaping FlutterEventSink) {
@@ -251,7 +253,7 @@ public class FlutterRTMPStreaming : NSObject {
                 rtmpStream.videoSettings = videoSettings
             }
         }
-        rtmpStream.append(buffer)
+        rtmpStream.append(overlayCompositor?.composite(buffer) ?? buffer)
     }
     
     @objc

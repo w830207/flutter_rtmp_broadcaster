@@ -3,6 +3,8 @@ package com.app.rtmp_publisher
 import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.graphics.Point
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCharacteristics
@@ -14,6 +16,8 @@ import android.view.SurfaceHolder
 import android.view.View
 import android.widget.Toast
 import com.pedro.common.ConnectChecker
+import com.pedro.encoder.input.gl.render.RenderMode
+import com.pedro.encoder.input.gl.render.filters.`object`.ImageObjectFilterRender
 import com.pedro.encoder.input.video.CameraHelper
 import com.pedro.encoder.input.video.CameraHelper.Facing.BACK
 import com.pedro.encoder.input.video.CameraHelper.Facing.FRONT
@@ -42,6 +46,17 @@ class CameraNativeView(
     private var isSurfaceCreated = false
     private var fps = 0
     private var mirror = false
+    private var overlays: List<OverlaySpec> = emptyList()
+
+    /// One overlay: an image file and its rect, normalized (0..1) to the
+    /// stream frame with the origin at the top-left, as viewers see it.
+    data class OverlaySpec(
+        val path: String,
+        val left: Double,
+        val top: Double,
+        val width: Double,
+        val height: Double,
+    )
 
     init {
         glView.setAspectRatioMode(AspectRatioMode.Adjust)
@@ -387,7 +402,43 @@ class CameraNativeView(
     // The front camera is streamed mirrored by default; flip it back unless
     // mirroring was requested.
     private fun applyStreamFlip() {
-        glView.setIsStreamHorizontalFlip(rtmpCamera.cameraFacing == FRONT && !mirror)
+        glView.setIsStreamHorizontalFlip(isStreamFlipped())
+        applyOverlays()
+    }
+
+    private fun isStreamFlipped(): Boolean = rtmpCamera.cameraFacing == FRONT && !mirror
+
+    /// Replaces all overlays, ordered bottom to top.
+    fun setOverlays(overlays: List<OverlaySpec>, result: MethodChannel.Result) {
+        this.overlays = overlays
+        applyOverlays()
+        result.success(null)
+    }
+
+    /// Overlays are drawn on the stream output only; the Flutter side draws
+    /// them over the preview. The stream flip runs after the filters, so a
+    /// flipped stream gets a pre-flipped image at a mirrored position, which
+    /// keeps overlays unmirrored for viewers.
+    private fun applyOverlays() {
+        glView.clearFilters()
+        val flipped: Boolean = isStreamFlipped()
+        for (overlay: OverlaySpec in overlays) {
+            val decoded: Bitmap = BitmapFactory.decodeFile(overlay.path) ?: continue
+            val bitmap: Bitmap = if (flipped) mirrored(decoded) else decoded
+            val left: Double = if (flipped) 1.0 - overlay.left - overlay.width else overlay.left
+            val filter: ImageObjectFilterRender = ImageObjectFilterRender()
+            filter.setRenderMode(RenderMode.OUTPUT)
+            glView.addFilter(filter)
+            filter.setImage(bitmap)
+            filter.setScale((overlay.width * 100).toFloat(), (overlay.height * 100).toFloat())
+            filter.setPosition((left * 100).toFloat(), (overlay.top * 100).toFloat())
+        }
+    }
+
+    private fun mirrored(bitmap: Bitmap): Bitmap {
+        val matrix: Matrix = Matrix()
+        matrix.preScale(-1f, 1f)
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, false)
     }
 
     fun getStreamStatistics(result: MethodChannel.Result) {

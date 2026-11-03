@@ -190,6 +190,7 @@ FlutterStreamHandler>
 @property(strong, nonatomic) AVCaptureVideoDataOutput *videoOutput;
 @property(strong, nonatomic) AVCaptureAudioDataOutput *audioOutput;
 @property(strong, nonatomic) FlutterRTMPStreaming *rtmpStream;
+@property(strong, nonatomic) FlutterRTMPOverlayCompositor *overlayCompositor;
 @property(assign, nonatomic) BOOL isRecording;
 
 
@@ -363,6 +364,18 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
 - (void)setMirror:(BOOL)mirror result:(FlutterResult)result {
     _mirror = mirror;
     [self updateVideoConnection];
+    result(nil);
+}
+
+- (FlutterRTMPOverlayCompositor *)overlayCompositor {
+    if (_overlayCompositor == nil) {
+        _overlayCompositor = [[FlutterRTMPOverlayCompositor alloc] init];
+    }
+    return _overlayCompositor;
+}
+
+- (void)setOverlays:(NSArray<NSDictionary<NSString *, id> *> *)overlays result:(FlutterResult)result {
+    [self.overlayCompositor setOverlays:overlays];
     result(nil);
 }
 
@@ -853,6 +866,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         }
         
         _rtmpStream = [[FlutterRTMPStreaming alloc] initWithSink: _eventSink];
+        _rtmpStream.overlayCompositor = self.overlayCompositor;
         if (bitrate == nil || bitrate == 0) {
             bitrate = [NSNumber numberWithInt:160 * 1000];
         }
@@ -887,6 +901,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         }
         
         _rtmpStream = [[FlutterRTMPStreaming alloc] initWithSink:_eventSink];
+        _rtmpStream.overlayCompositor = self.overlayCompositor;
         if (bitrate == nil || bitrate == 0) {
             bitrate = [NSNumber numberWithInt:160 * 1000];
         }
@@ -1283,6 +1298,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
             [_camera switchCameraWithResult:result];
         } else if ([@"setMirror" isEqualToString:call.method]) {
             [_camera setMirror:[call.arguments[@"mirror"] boolValue] result:result];
+        } else if ([@"setOverlays" isEqualToString:call.method]) {
+            [_camera setOverlays:call.arguments[@"overlays"] result:result];
         } else if ([@"setAudioMuted" isEqualToString:call.method]) {
             [_camera setAudioMuted:[call.arguments[@"muted"] boolValue] result:result];
         } else if ([@"setFlashMode" isEqualToString:call.method]) {

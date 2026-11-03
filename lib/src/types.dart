@@ -203,3 +203,33 @@ class CameraException implements Exception {
   @override
   String toString() => '$runtimeType($code, $description)';
 }
+
+/// A still image drawn onto the streamed video, above the camera image.
+///
+/// The rect is normalized (0..1) to the streamed frame, with the origin at
+/// the top-left corner as viewers see it. Overlays are never mirrored and are
+/// not drawn on the native preview.
+class StreamOverlay {
+  const StreamOverlay({
+    required this.imagePath,
+    required this.left,
+    required this.top,
+    required this.width,
+    required this.height,
+  });
+
+  /// Path to an image file on the device.
+  final String imagePath;
+  final double left;
+  final double top;
+  final double width;
+  final double height;
+
+  Map<String, Object> toMap() => <String, Object>{
+        'path': imagePath,
+        'left': left,
+        'top': top,
+        'width': width,
+        'height': height,
+      };
+}

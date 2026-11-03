@@ -1047,6 +1047,31 @@ class CameraController extends ValueNotifier<CameraValue> {
     }
   }
 
+  /// Replaces the overlays drawn onto the streamed video, ordered bottom to
+  /// top. Pass an empty list to remove them all. They also apply to a stream
+  /// started later.
+  Future<void> setOverlays(List<StreamOverlay> overlays) async {
+    if (!value.isInitialized! || _isDisposed) {
+      throw CameraException(
+        'Uninitialized CameraController',
+        'setOverlays was called on uninitialized CameraController.',
+      );
+    }
+    try {
+      await _channel.invokeMethod<void>(
+        'setOverlays',
+        <String, dynamic>{
+          'textureId': _textureId,
+          'overlays': <Map<String, Object>>[
+            for (final StreamOverlay overlay in overlays) overlay.toMap(),
+          ],
+        },
+      );
+    } on PlatformException catch (e) {
+      throw CameraException(e.code, e.message);
+    }
+  }
+
   /// Sets whether the microphone is muted. While muted, silence is streamed
   /// so the stream keeps its audio track.
   Future<void> setAudioMuted(bool muted) async {
